@@ -193,5 +193,10 @@ print("=========================开始转换=========================")
 while True:
     has_more = zhu_hs()
     if not has_more:
+        try:
+            if os.path.exists("TEMPFILE"):
+                os.remove("TEMPFILE")
+        except:
+            pass
         print("=========================转换全部完成！=========================")
         break

@@ -8,7 +8,7 @@ def a(s):
     return result
 
 
-chu=open("A\\"+"uio","a",encoding="utf-8")
+chu = None
 asd=open("TriggerScript.log","r",encoding="utf-8")
 asd=asd.readlines()
 del asd[0]
@@ -17,7 +17,10 @@ while zxc < len(asd):
     qwe = a(asd[zxc])
     if qwe:
         if qwe[-1] == "r":
+            if chu:
+                chu.close()
             chu = open("A\\" + qwe, "w", encoding="utf-8")
         else:
-            chu.write(qwe + "\n")
+            if chu:
+                chu.write(qwe + "\n")
     zxc = zxc + 1
