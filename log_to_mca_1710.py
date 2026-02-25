@@ -71,7 +71,8 @@ class EmptySection1710:
         self.y = y
         self.blocks = bytearray(4096)
         self.data = bytearray(2048)
-        self.skylight = bytearray(2048)  # Tracked manually for initialization
+        self.blocklight = bytearray(2048)
+        self.skylight = bytearray([0xFF] * 2048)  # Force MC to calculate SkyLight
         self.is_empty = True
 
     def set_block(self, block_id: int, data_val: int, x: int, y: int, z: int):
@@ -99,7 +100,7 @@ class EmptySection1710:
         sec_tag.tags.append(data_tag)
         
         blocklight_tag = nbt.TAG_Byte_Array(name='BlockLight')
-        blocklight_tag.value = bytearray(2048)
+        blocklight_tag.value = self.blocklight
         sec_tag.tags.append(blocklight_tag)
         
         skylight_tag = nbt.TAG_Byte_Array(name='SkyLight')
@@ -115,16 +116,9 @@ class EmptyChunk1710:
         self.sections = []
         for _ in range(16):
             self.sections.append(None)
-        self.heightmap = [0] * 256
 
     def set_block(self, block_id: int, data_val: int, x: int, y: int, z: int):
         if y < 0 or y > 255: return
-        
-        # Update HeightMap (track highest non-air block)
-        if block_id != 0:
-            h_idx = z * 16 + x
-            if y + 1 > self.heightmap[h_idx]:
-                self.heightmap[h_idx] = y + 1
         
         sy = y // 16
         if self.sections[sy] is None:
@@ -148,33 +142,13 @@ class EmptyChunk1710:
         ])
         
         heightmap_tag = nbt.TAG_Int_Array(name='HeightMap')
-        # Use our tracked highest-blocks index per chunk column
-        heightmap_tag.value = self.heightmap
+        # We start with 256 integers. Let Minecraft recalculate light 
+        heightmap_tag.value = [0] * 256
         level.tags.append(heightmap_tag)
         
         biomes_tag = nbt.TAG_Byte_Array(name='Biomes')
         biomes_tag.value = bytearray([1] * 256) # 1 = plains biome
         level.tags.append(biomes_tag)
-
-        # Pre-calculate SkyLight after generating standard sections
-        for s in self.sections:
-            if s and not s.is_empty:
-                sy = s.y * 16
-                for bx in range(16):
-                    for bz in range(16):
-                        h_val = self.heightmap[bz * 16 + bx]
-                        for by in range(16):
-                            global_y = sy + by
-                            # If we are above the highest solid block, light level is 15
-                            if global_y >= h_val:
-                                index = by * 256 + bz * 16 + bx
-                                data_index = index // 2
-                                # Extract current bytes and apply 15 (0xF)
-                                current_byte = s.skylight[data_index]
-                                if index % 2 == 0:
-                                    s.skylight[data_index] = (current_byte & 0xF0) | 0x0F
-                                else:
-                                    s.skylight[data_index] = (current_byte & 0x0F) | 0xF0
 
         sections = nbt.TAG_List(name='Sections', type=nbt.TAG_Compound)
         for s in self.sections:
