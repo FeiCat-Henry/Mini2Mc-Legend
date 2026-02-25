@@ -102,6 +102,7 @@ end
 ScriptSupportEvent:registerEvent([=[minitimer.change]=],uio)
 
 
-main()
-main()
-main()
+-- 使用 while 循环来自动处理 asd 里的所有内容
+while asd and #asd > 0 do
+    main()
+end
