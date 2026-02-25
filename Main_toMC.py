@@ -64,8 +64,14 @@ def chuasd():
 
     yan_se={}
     schu=open("TEMPFILE","a")
-    while dai[0][-1]!="r":
+    
+    # 查找列表中下一个以 ".r" 结尾的文件
+    while len(dai) > 0 and (not str(dai[0]).endswith("r")):
         del dai[0]
+        
+    if len(dai) == 0:
+        return False
+        
     ming=dai[0]
     del dai[0]
     print(ming)
@@ -129,9 +135,12 @@ def zhu_hs():
     bina_l = 0
 
     try:
-        chuasd()
+        # 如果没有更多的文件可以处理，chuasd() 返回 False
+        if chuasd() == False:
+            return False
+            
         chus()
-        while True:
+        while bina_l < len(asd):
             if asd[bina_l][0]=="空":
                 sgu_f=0
 
@@ -151,8 +160,6 @@ def zhu_hs():
                                 x=x+1
 
                     except Exception as e:
-                        #print(e)
-                        #print(x)
                         x=0
                         z=0
 
@@ -161,20 +168,30 @@ def zhu_hs():
                 sgu_f=1
                 qi_x=extract_numbers(asd[bina_l])[0]
                 qi_z=extract_numbers(asd[bina_l])[1]
-                #print(extract_numbers(asd[bina_l]))
                 y=0
             bina_l=bina_l+1
             if bina_l%10000==0:
                 print(bina_l)
-    except Exception as e:
+                
+        # 正常跑完一个文件后保存 MCA
         print(bina_l)
         print("正在生成MCA文件"+str(kuai))
+        region.save('r.'+str(extract_coordinates(ming)[0])+'.'+str(extract_coordinates(ming)[1])+'.mca')
+        schu.close()
+        return True
+        
+    except Exception as e:
+        print(bina_l)
+        print("遇到错误，正在保存临时MCA文件"+str(kuai))
         print(e)
         region.save('r.'+str(extract_coordinates(ming)[0])+'.'+str(extract_coordinates(ming)[1])+'.mca')
-
-
+        schu.close()
+        return True
 
 
 print("=========================开始转换=========================")
 while True:
-    zhu_hs()
+    has_more = zhu_hs()
+    if not has_more:
+        print("=========================转换全部完成！=========================")
+        break

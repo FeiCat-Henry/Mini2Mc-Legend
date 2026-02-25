@@ -51,7 +51,8 @@ function printChunkBlockIDs(chunkX, chunkZ)
         for dx = 0, 15 do
             for dz = 0, 15 do
                 local miniX = baseX + dx
-                local miniZ = -(baseZ + dz) -- Z坐标翻转
+                -- 核心修复：MC Z轴不仅反转，而且方块偏移1格以完美对齐MC区块！
+                local miniZ = -(baseZ + dz) - 1
                 Player:setPosition(0, miniX, y, miniZ)
                 local _, id = Block:getBlockID(miniX, y, miniZ)
                 table.insert(ids, tostring(id))
@@ -88,11 +89,17 @@ function processNextChunk()
         -- 尝试从总列表中加载下一个文件的区块列表（如 x26z-1.r）
         if asd and #asd > 0 then
             local filename = asd[1]
-            print("====================")
-            print("开始读取文件: " .. filename)
             local x, z = extractCoordinates(filename)
             if x and z then
-                local coords = bian(x, z)
+                -- 将用户填入的“迷你世界大区坐标”自动转换为“Minecraft大区坐标”
+                local mcX = x
+                local mcZ = -z - 1
+                local mcFilename = "x" .. mcX .. "z" .. mcZ .. ".r"
+                
+                -- 仅输出纯文件名（Minecraft坐标名称）提供给Python打包
+                print(mcFilename)
+                
+                local coords = bian(mcX, mcZ)
                 for _, coord in ipairs(coords) do
                     table.insert(chunkQueue, coord)
                 end

@@ -13,10 +13,11 @@ asd=open("TriggerScript.log","r",encoding="utf-8")
 asd=asd.readlines()
 del asd[0]
 zxc=0
-while True:
-    qwe=a(asd[zxc])
-    if qwe[-1]=="r":
-        chu=open("A\\"+qwe,"w",encoding="utf-8")
-    else:
-        chu.write(qwe+"\n")
-    zxc=zxc+1
+while zxc < len(asd):
+    qwe = a(asd[zxc])
+    if qwe:
+        if qwe[-1] == "r":
+            chu = open("A\\" + qwe, "w", encoding="utf-8")
+        else:
+            chu.write(qwe + "\n")
+    zxc = zxc + 1
