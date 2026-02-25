@@ -77,36 +77,71 @@ function printChunkBlockIDs(chunkX, chunkZ)
     end
 end
 
--- 主逻辑：处理 asd 列表并调用函数
-function main()
-    -- 假设 asd 是你提供的输入列表，格式如 {"x26z-1.r", "x27z0.r"}
-    
-    local filename = asd[1]
-    print(filename)
-    local x, z = extractCoordinates(filename)
-    if x and z then
-        local coords = bian(x, z)
-        for _, coord in ipairs(coords) do
-            printChunkBlockIDs(coord[1], coord[2])
+local chunkQueue = {}
+local globalTotalChunks = (asd and #asd or 0) * 1024
+local globalProcessedChunks = 0
+local isProcessing = true
+
+-- 每次只处理一个区块 (16x16x256 = 65536次循环)，防止游戏完全卡死
+function processNextChunk()
+    if #chunkQueue == 0 then
+        -- 尝试从总列表中加载下一个文件的区块列表（如 x26z-1.r）
+        if asd and #asd > 0 then
+            local filename = asd[1]
+            print("====================")
+            print("开始读取文件: " .. filename)
+            local x, z = extractCoordinates(filename)
+            if x and z then
+                local coords = bian(x, z)
+                for _, coord in ipairs(coords) do
+                    table.insert(chunkQueue, coord)
+                end
+                local currentTotalFiles = math.floor(globalTotalChunks / 1024)
+                local currentFileIndex = currentTotalFiles - #asd + 1
+                Chat:sendSystemMsg("#G[导出脚本] #W开始读取文件: " .. filename .. " (#Y" .. currentFileIndex .. " / " .. currentTotalFiles .. "#W)")
+            end
+            table.remove(asd, 1)
+        else
+            if isProcessing then
+                print("【导出完毕！】所有区块均已处理完成！")
+                Chat:sendSystemMsg("#R[导出脚本] #W【导出完毕！】所有地图区块均已处理完成！")
+                isProcessing = false
+            end
+            return false
         end
     end
-    table.remove(asd, 1)
+    
+    -- 处理队首的一个区块
+    if #chunkQueue > 0 then
+        local coord = table.remove(chunkQueue, 1)
+        globalProcessedChunks = globalProcessedChunks + 1
+        
+        -- 每处理 16 个区块，或者处理到最后一个区块时，发一次进度给聊天栏
+        if globalProcessedChunks % 16 == 0 or globalProcessedChunks == globalTotalChunks then
+            local percent = 0
+            if globalTotalChunks > 0 then
+                percent = (globalProcessedChunks / globalTotalChunks) * 100
+            end
+            local formattedPercent = string.format("%.2f", percent)
+            -- 移除无法显示的特殊方块符号，只留下纯净的文字百分比
+            Chat:sendSystemMsg("#Y[全局进度] #W" .. formattedPercent .. "％")
+        end
+
+        printChunkBlockIDs(coord[1], coord[2])
+        return true
+    end
+    return false
 end
 
-
 function uio()
+    if not isProcessing then return end
+
     shi = shi - 1
-    if shi == 0 then
-        shi = 40
-        main()
+    if shi <= 0 then
+        shi = 4 -- 每4个游戏刻提取1个区块(约0.2秒一个)，防止单帧卡死时间过长
+        processNextChunk()
     end
 end
 
 
-ScriptSupportEvent:registerEvent([=[minitimer.change]=],uio)
-
-
--- 使用 while 循环来自动处理 asd 里的所有内容
-while asd and #asd > 0 do
-    main()
-end
+ScriptSupportEvent:registerEvent([=[Game.Run]=],uio)

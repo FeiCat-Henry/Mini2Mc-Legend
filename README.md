@@ -22,24 +22,6 @@
 
 安装运行库，然后再看以下教程。
 
-![pic1](pics\pic2.png)
-
-![pic3](pics\pic3.png)
-
-![pic4](pics\pic4.png)
-
-![pic5](pics\pic5.png)
-
-![pic6](pics\pic6.png)
-
-![pic7](pics\pic7.png)
-
-![pic8](pics\pic8.png)
-
-![pic9](pics\pic9.png)
-
-![pic10](pics\pic10.png)
-
 ## 后记
 
 目前这个项目还算完善，至少能够正常使用了，打破了这个障壁，但是用起来还是会有部分小问题，不过由于团队技术限制，目前也只能做到这里了，后续我们有可能考虑制作gui版本和调用显卡进行转换，不过那些以后再说吧。如果你有意向加入我们，以下是几个可用的联系方式，我们十分期待你的到来！
