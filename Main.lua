@@ -40,7 +40,9 @@ function printChunkBlockIDs(chunkX, chunkZ)
     local baseX = chunkX * 16
     local baseZ = chunkZ * 16
     
-    Player:setPosition(0,baseX, 6, baseZ)
+    -- 注意这里将 mc 的 Z 坐标取反（迷你世界朝北递增，MC朝北递减）
+    local miniSafeZ = -baseZ
+    Player:setPosition(0, baseX, 6, miniSafeZ)
 
     print("区"..baseX.."/"..baseZ)
     for y = 0, 255 do
@@ -48,8 +50,10 @@ function printChunkBlockIDs(chunkX, chunkZ)
 
         for dx = 0, 15 do
             for dz = 0, 15 do
-                Player:setPosition(0, baseX + dx, y, baseZ + dz)
-                local _, id = Block:getBlockID(baseX + dx, y, baseZ + dz)
+                local miniX = baseX + dx
+                local miniZ = -(baseZ + dz) -- Z坐标翻转
+                Player:setPosition(0, miniX, y, miniZ)
+                local _, id = Block:getBlockID(miniX, y, miniZ)
                 table.insert(ids, tostring(id))
             end
         end
