@@ -6,7 +6,7 @@
 
 程序基于python运行，如果你的电脑还没有安装python，请自行前往python官网安装python。程序需要安装一些运行库才能运行，在当前目录运行cmd，输入以下命令安装运行库
 
-`pip install anvil`
+`pip install anvil-parser`
 
 ## 版权信息
 
