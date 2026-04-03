@@ -1,4 +1,4 @@
-# Mini2MC Legend v1.0
+# Mini2MC Legend v2.0
 
 
 
