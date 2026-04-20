@@ -7,6 +7,7 @@ import math
 import zlib
 from io import BytesIO
 import anvil
+import numpy as np
 
 # Block ID mappings (MiniWorld ID -> MC name -> MC 1.7.10 ID/Data)
 # REVERSE_ID_MAP is a fast lookup from "minecraft:stone" -> (1, 0)
@@ -72,7 +73,7 @@ class EmptySection1710:
         self.blocks = bytearray(4096)
         self.data = bytearray(2048)
         self.blocklight = bytearray(2048)
-        self.skylight = bytearray([0xFF] * 2048)  # Force MC to calculate SkyLight
+        self.skylight = bytearray(2048)
         self.is_empty = True
 
     def set_block(self, block_id: int, data_val: int, x: int, y: int, z: int):
@@ -116,6 +117,7 @@ class EmptyChunk1710:
         self.sections = []
         for _ in range(16):
             self.sections.append(None)
+        self.heightmap = [0] * 256
 
     def set_block(self, block_id: int, data_val: int, x: int, y: int, z: int):
         if y < 0 or y > 255: return
@@ -133,7 +135,7 @@ class EmptyChunk1710:
             nbt.TAG_Int(name='xPos', value=self.x),
             nbt.TAG_Int(name='zPos', value=self.z),
             nbt.TAG_Long(name='LastUpdate', value=0),
-            nbt.TAG_Byte(name='LightPopulated', value=0),
+            nbt.TAG_Byte(name='LightPopulated', value=1),
             nbt.TAG_Byte(name='TerrainPopulated', value=1),
             nbt.TAG_Byte(name='V', value=1),
             nbt.TAG_Long(name='InhabitedTime', value=0),
@@ -142,8 +144,7 @@ class EmptyChunk1710:
         ])
         
         heightmap_tag = nbt.TAG_Int_Array(name='HeightMap')
-        # We start with 256 integers. Let Minecraft recalculate light 
-        heightmap_tag.value = [0] * 256
+        heightmap_tag.value = self.heightmap
         level.tags.append(heightmap_tag)
         
         biomes_tag = nbt.TAG_Byte_Array(name='Biomes')
@@ -157,6 +158,140 @@ class EmptyChunk1710:
         level.tags.append(sections)
         root.tags.append(level)
         return root
+
+def calculate_region_lighting(region):
+    print(f"开始使用全局 NumPy 渲染光照 (Region: {region.x}, {region.z})...")
+    blocks = np.zeros((512, 256, 512), dtype=np.uint8)
+    
+    # 1. 提取所有区块数据到 3D NumPy 数组
+    for chunk_idx, chunk in enumerate(region.chunks):
+        if chunk is None:
+            continue
+        cx_local = chunk_idx % 32
+        cz_local = chunk_idx // 32
+        
+        x_start = cx_local * 16
+        z_start = cz_local * 16
+        
+        for sy, sec in enumerate(chunk.sections):
+            if sec is None or sec.is_empty:
+                continue
+            
+            y_start = sy * 16
+            
+            sec_blocks = np.frombuffer(sec.blocks, dtype=np.uint8).reshape((16, 16, 16))
+            blocks[x_start:x_start+16, y_start:y_start+16, z_start:z_start+16] = sec_blocks.transpose((2, 0, 1))
+
+    # 2. 准备光照数组
+    opacity = np.full((512, 256, 512), 15, dtype=np.int8)
+    transparent = {0: 0, 8: 2, 9: 2, 18: 1, 20: 0, 161: 1, 65: 0}
+    for b_id, op in transparent.items():
+        opacity[blocks == b_id] = op
+        
+    emitters = {10: 15, 11: 15, 50: 14, 51: 15, 89: 15, 138: 15, 169: 15}
+    blocklight = np.zeros((512, 256, 512), dtype=np.int8)
+    for b_id, em in emitters.items():
+        blocklight[blocks == b_id] = em
+
+    skylight = np.zeros((512, 256, 512), dtype=np.int8)
+    heightmap_global = np.zeros((512, 512), dtype=int)
+    
+    # 垂直光照 & HeightMap
+    current_light = np.full((512, 512), 15, dtype=np.int8)
+    for y in range(255, -1, -1):
+        op = opacity[:, y, :]
+        is_solid = (op == 15)
+        
+        mask = (heightmap_global == 0) & (op > 0)
+        heightmap_global[mask] = y + 1
+        
+        current_light[is_solid] = 0
+        current_light[~is_solid] -= op[~is_solid]
+        np.clip(current_light, 0, 15, out=current_light)
+        
+        skylight[:, y, :] = current_light
+
+    # 3. NumPy 14-pass 3D 卷积光照扩散 (借用 MCEdit 原理)
+    falloff = np.maximum(opacity, 1)
+    
+    for _ in range(14):
+        changed = False
+        
+        # --- BlockLight ---
+        bl_max = np.zeros_like(blocklight)
+        bl_max[:-1, :, :] = np.maximum(bl_max[:-1, :, :], blocklight[1:, :, :])
+        bl_max[1:, :, :] = np.maximum(bl_max[1:, :, :], blocklight[:-1, :, :])
+        bl_max[:, :-1, :] = np.maximum(bl_max[:, :-1, :], blocklight[:, 1:, :])
+        bl_max[:, 1:, :] = np.maximum(bl_max[:, 1:, :], blocklight[:, :-1, :])
+        bl_max[:, :, :-1] = np.maximum(bl_max[:, :, :-1], blocklight[:, :, 1:])
+        bl_max[:, :, 1:] = np.maximum(bl_max[:, :, 1:], blocklight[:, :, :-1])
+        
+        new_bl = bl_max - falloff
+        np.clip(new_bl, 0, 15, out=new_bl)
+        
+        mask_bl = new_bl > blocklight
+        if np.any(mask_bl):
+            blocklight[mask_bl] = new_bl[mask_bl]
+            changed = True
+            
+        # --- SkyLight ---
+        sl_max = np.zeros_like(skylight)
+        sl_max[:-1, :, :] = np.maximum(sl_max[:-1, :, :], skylight[1:, :, :])
+        sl_max[1:, :, :] = np.maximum(sl_max[1:, :, :], skylight[:-1, :, :])
+        sl_max[:, :-1, :] = np.maximum(sl_max[:, :-1, :], skylight[:, 1:, :])
+        sl_max[:, 1:, :] = np.maximum(sl_max[:, 1:, :], skylight[:, :-1, :])
+        sl_max[:, :, :-1] = np.maximum(sl_max[:, :, :-1], skylight[:, :, 1:])
+        sl_max[:, :, 1:] = np.maximum(sl_max[:, :, 1:], skylight[:, :, :-1])
+        
+        new_sl = sl_max - falloff
+        np.clip(new_sl, 0, 15, out=new_sl)
+        
+        mask_sl = new_sl > skylight
+        if np.any(mask_sl):
+            skylight[mask_sl] = new_sl[mask_sl]
+            changed = True
+            
+        if not changed:
+            break
+
+    # 4. 把计算结果写回 Chunk
+    for chunk_idx, chunk in enumerate(region.chunks):
+        if chunk is None:
+            continue
+        cx_local = chunk_idx % 32
+        cz_local = chunk_idx // 32
+        
+        x_start = cx_local * 16
+        z_start = cz_local * 16
+        
+        hm = heightmap_global[x_start:x_start+16, z_start:z_start+16]
+        chunk.heightmap = hm.T.flatten().tolist()
+        
+        for sy in range(16):
+            sec = chunk.sections[sy]
+            if sec is None or sec.is_empty:
+                continue
+                
+            y_start = sy * 16
+            
+            sl = skylight[x_start:x_start+16, y_start:y_start+16, z_start:z_start+16]
+            bl = blocklight[x_start:x_start+16, y_start:y_start+16, z_start:z_start+16]
+            
+            sl_transposed = sl.transpose((1, 2, 0)).flatten().tolist()
+            bl_transposed = bl.transpose((1, 2, 0)).flatten().tolist()
+            
+            sl_packed = bytearray(2048)
+            bl_packed = bytearray(2048)
+            
+            for i in range(2048):
+                idx1 = i * 2
+                idx2 = i * 2 + 1
+                sl_packed[i] = (sl_transposed[idx1] & 0x0F) | ((sl_transposed[idx2] & 0x0F) << 4)
+                bl_packed[i] = (bl_transposed[idx1] & 0x0F) | ((bl_transposed[idx2] & 0x0F) << 4)
+                
+            sec.skylight = sl_packed
+            sec.blocklight = bl_packed
+
 
 block_cache = {}
 
@@ -244,6 +379,7 @@ def main():
                     save_path = os.path.join(output_dir, mca_name)
                     print(f"保存上一个区域文件(1.7.10格式): {save_path}")
                     try:
+                        calculate_region_lighting(current_region)
                         current_region.save(save_path)
                     except Exception as e:
                         print(f"保存文件 {save_path} 时发生错误: {e}")
@@ -283,6 +419,7 @@ def main():
             save_path = os.path.join(output_dir, mca_name)
             print(f"保存最后的区域文件(1.7.10格式): {save_path}")
             try:
+                calculate_region_lighting(current_region)
                 current_region.save(save_path)
             except Exception as e:
                 print(f"保存文件 {save_path} 时发生错误: {e}")
