@@ -67,7 +67,12 @@ def apply_blocks_to_region(current_region, line, chunk_bx, current_y, chunk_bz):
             
             if value not in block_cache:
                 mc_block = convert_block_id(value)
-                block_cache[value] = anvil.Block('minecraft', mc_block)
+                # For high versions (1.13+), leaves need the 'persistent' property set to 'true' 
+                # otherwise they will decay if not attached to a log.
+                if mc_block.endswith('_leaves'):
+                    block_cache[value] = anvil.Block('minecraft', mc_block, properties={'persistent': 'true'})
+                else:
+                    block_cache[value] = anvil.Block('minecraft', mc_block)
             anvil_block = block_cache[value]
             
             for _ in range(count):
