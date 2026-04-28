@@ -279,12 +279,6 @@ def convert_block_state(custom_id):
     mc_block = convert_block_id(custom_id_str)
     properties = {}
 
-    # 422 is RoughRockBrick in blockdef.csv, but block_id_data.txt maps it to
-    # the invalid modern ID double_stone_slab. Use a full stone-brick block so
-    # it stays visible instead of being interpreted as an illegal state.
-    if custom_id_str == "422" or mc_block == "double_stone_slab":
-        return "stone_bricks", properties
-
     if mc_block.endswith("_slab"):
         properties.update({
             "type": "bottom",
