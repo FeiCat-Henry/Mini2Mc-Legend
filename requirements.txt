@@ -1,0 +1,18 @@
+# Mini2MC 运行时依赖
+#
+# 第三方包只有 Pillow：用于「渲染俯视预览」和 GUI 里的预览面板。
+# .r → .mca 的转换、以及回读校验，只用 Python 标准库（lzma / zlib / struct / json），
+# 不需要装任何东西。
+Pillow>=9.5
+
+# 下面这些不是 pip 包，由 Python / 系统自带：
+#   tkinter   图形界面。Windows 官方安装包自带；Debian/Ubuntu 需
+#             sudo apt install python3-tk，Arch 需 pacman -S tk
+#             没有 Tk 时工具会自动退到 --web 的浏览器界面，功能相同
+#   lzma      需要 Python 编译时链接 liblzma。python.org 官方安装包与
+#             各发行版自带，自编译的解释器要确认带 liblzma
+#
+# 已在 Python 3.12 + Pillow 13.0.0 上验证：
+#   python tools/MiniWorld_R_Tool.py --selftest <存档目录>   → 回读 0 不一致
+#   python tools/block_id_Editor.py --check                  → 无问题
+# 只用 Image.new / Image.open / Image.resize / Image.NEAREST，Pillow 9 以上都可用。
