@@ -1,0 +1,728 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>你盖的房子还在 · Mini2MC｜迷你世界存档转 Minecraft</title>
+<meta name="description" content="把《迷你世界》的 .r 区块存档直接转成 Minecraft Java 的 .mca 世界：46 个 region、16,008 个区块、2.3 亿方块，逐块回读零差异，GUI 与命令行都能跑。">
+
+<!-- SEO / 分享卡片：部署到你自己的仓库后，把下面 4 处 your-github-user 换成你的用户名（
+     canonical / og:url / og:image / JSON-LD），并同步改 docs/robots.txt 与 docs/sitemap.xml -->
+<link rel="canonical" href="https://feicat-henry.github.io/Mini2MC-Legend/">
+<meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1">
+<meta name="theme-color" content="#0B0E0C">
+<meta name="author" content="Mini2MC contributors">
+<meta name="keywords" content="迷你世界存档,存档转换,.r转.mca,区块格式,Minecraft世界,Mini2MC">
+<link rel="preload" as="image" href="assets/hero.webp" fetchpriority="high">
+<meta property="og:type" content="website">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:site_name" content="Mini2MC">
+<meta property="og:title" content="你盖的房子还在 · Mini2MC｜迷你世界存档转 Minecraft">
+<meta property="og:description" content="把《迷你世界》的 .r 区块存档直接转成 Minecraft Java 的 .mca 世界，逐块回读零差异。">
+<meta property="og:url" content="https://feicat-henry.github.io/Mini2MC-Legend/">
+<meta property="og:image" content="https://feicat-henry.github.io/Mini2MC-Legend//assets/og.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="等距视角的迷你世界村落：围墙、樱花树、湖与沙滩">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="你盖的房子还在 · Mini2MC">
+<meta name="twitter:description" content="把《迷你世界》的 .r 区块存档直接转成 Minecraft Java 的 .mca 世界。">
+<meta name="twitter:image" content="https://feicat-henry.github.io/Mini2MC-Legend//assets/og.jpg">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "Mini2MC",
+  "alternateName": "迷你世界存档转 Minecraft",
+  "description": "把《迷你世界》（MiniwAr 引擎）的 .r 区块存档转换成 Minecraft Java 版可读的 .mca 世界，逐块回读校验零差异。",
+  "url": "https://feicat-henry.github.io/Mini2MC-Legend//",
+  "downloadUrl": "https://github.com/your-github-user/Mini2MC-Legend",
+  "codeRepository": "https://github.com/your-github-user/Mini2MC-Legend",
+  "applicationCategory": "UtilitiesApplication",
+  "operatingSystem": "Windows, macOS, Linux",
+  "softwareRequirements": "Python 3.9+ 与 Pillow（仅出预览图时需要）",
+  "programmingLanguage": "Python",
+  "license": "https://opensource.org/licenses/MIT",
+  "isAccessibleForFree": true,
+  "offers": { "@type": "Offer", "price": "0", "priceCurrency": "CNY" },
+  "author": { "@type": "Organization", "name": "Mini2MC contributors" },
+  "inLanguage": "zh-CN",
+  "keywords": "迷你世界, 存档转换, Minecraft, .mca, .r, 区块格式"
+}
+</script>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%230B0E0C'/%3E%3Cpath d='M16 5l10 5.5v11L16 27 6 21.5v-11z' fill='%237E9E63'/%3E%3Cpath d='M6 10.5L16 16l10-5.5M16 16v11' stroke='%230B0E0C' stroke-width='1.4' fill='none'/%3E%3C/svg%3E">
+<style>
+:root{
+  --ink:#0B0E0C;
+  --ink-2:#101512;
+  --ink-3:#16201A;
+  --bone:#EDE8DC;
+  --bone-2:#B9B3A5;
+  --bone-3:#7D7A70;
+  --amber:#F2A03D;
+  --moss:#7E9E63;
+  --water:#3F7FA6;
+  --serif:"Source Han Serif SC","Noto Serif CJK SC","Songti SC","STSong","SimSun",serif;
+  --sans:"PingFang SC","Microsoft YaHei","Hiragino Sans GB",system-ui,sans-serif;
+  --mono:"Cascadia Mono","Cascadia Code",Consolas,"DejaVu Sans Mono",monospace;
+  --pad:clamp(18px,5vw,72px);
+}
+*{box-sizing:border-box}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+html{scroll-behavior:smooth;overflow-x:clip}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+body{
+  margin:0;background:var(--ink);color:var(--bone);
+  font-family:var(--sans);font-size:16px;line-height:1.72;
+  -webkit-font-smoothing:antialiased;
+}
+img{display:block;max-width:100%}
+a{color:inherit}
+:focus-visible{outline:2px solid var(--amber);outline-offset:3px}
+#slider:focus-visible{outline:none}
+#slider.kbfocus:focus-visible{outline:2px dashed var(--amber);outline-offset:-6px}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.wrap{max-width:1240px;margin:0 auto}
+
+/* 纸张噪点：一层固定底纹，透明度很低 */
+.grain{
+  position:fixed;inset:0;z-index:2;pointer-events:none;opacity:.055;
+  mix-blend-mode:overlay;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* ===== 顶栏 ===== */
+.top{
+  position:fixed;top:0;left:0;right:0;z-index:10;
+  height:58px;display:flex;align-items:center;gap:18px;
+  padding:0 var(--pad);
+  background:rgba(11,14,12,.86);
+  border-bottom:1px solid rgba(237,232,220,.12);
+}
+.brand{display:flex;align-items:center;gap:10px;font-family:var(--mono);font-size:13px;letter-spacing:.14em;text-decoration:none}
+.brand svg{width:20px;height:20px;flex:0 0 auto}
+.top nav{margin-left:auto;display:flex;gap:clamp(10px,2.2vw,26px);font-size:13px}
+.top nav a{text-decoration:none;color:var(--bone-2);padding:4px 0;white-space:nowrap}
+.top nav a:hover{color:var(--bone)}
+@media (max-width:640px){.top nav a:nth-child(-n+2){display:none}}
+
+/* ===== 首屏 ===== */
+.hero{position:relative;min-height:min(94svh,900px);display:flex;flex-direction:column;justify-content:flex-end;overflow:hidden}
+.hero-media{position:absolute;inset:-4% 0 -4%;z-index:0}
+.hero-media img{width:100%;height:100%;object-fit:cover;object-position:60% 62%;transform:scale(1.04);filter:brightness(.8) saturate(.92)}
+.hero-shade{
+  position:absolute;inset:0;z-index:1;
+  background:
+    linear-gradient(180deg,rgba(11,14,12,.74) 0%,rgba(11,14,12,.20) 30%,rgba(11,14,12,.58) 70%,var(--ink) 100%),
+    linear-gradient(100deg,rgba(9,12,10,.95) 0%,rgba(9,12,10,.82) 42%,rgba(9,12,10,.28) 72%,transparent 92%);
+}
+.hero-inner{position:relative;z-index:3;padding:0 var(--pad) clamp(26px,5vw,64px);max-width:min(100%,980px)}
+.tag{
+  display:inline-flex;align-items:center;gap:10px;margin:0 0 clamp(16px,2.4vw,28px);
+  font-family:var(--mono);font-size:11.5px;letter-spacing:.22em;color:var(--amber);
+}
+.tag::before{content:"";width:34px;height:1px;background:var(--amber);opacity:.7}
+h1{
+  margin:0;font-family:var(--serif);font-weight:700;
+  font-size:clamp(46px,11.4vw,138px);line-height:.98;letter-spacing:.01em;
+  text-wrap:balance;
+}
+h1 em{font-style:normal;color:var(--amber)}
+.lede{
+  margin:clamp(16px,2.6vw,26px) 0 0;max-width:41em;
+  font-size:clamp(14.5px,1.35vw,17px);line-height:1.8;color:var(--bone-2);
+}
+.hero-actions{display:flex;flex-wrap:wrap;gap:12px;margin-top:clamp(22px,3vw,34px)}
+.btn{
+  display:inline-flex;align-items:center;gap:9px;
+  padding:12px 20px;border:1px solid rgba(237,232,220,.28);
+  font-size:14px;text-decoration:none;color:var(--bone);
+  background:transparent;cursor:pointer;font-family:var(--sans);
+  transition:border-color .18s ease,background .18s ease,color .18s ease;
+}
+.btn:hover{border-color:var(--bone);background:rgba(237,232,220,.06)}
+.btn.solid{background:var(--amber);border-color:var(--amber);color:#1A1206;font-weight:600}
+.btn.solid:hover{background:#FFB559;border-color:#FFB559}
+.btn svg{width:15px;height:15px}
+.hero-facts{
+  position:relative;z-index:3;display:grid;grid-template-columns:repeat(2,1fr);
+  border-top:1px solid rgba(237,232,220,.16);
+}
+@media (min-width:760px){.hero-facts{grid-template-columns:repeat(4,1fr)}}
+.fact{padding:14px var(--pad) 16px;border-right:1px solid rgba(237,232,220,.1)}
+.fact:last-child{border-right:0}
+.fact .k{font-family:var(--mono);font-size:clamp(15px,1.9vw,21px);letter-spacing:.02em}
+.fact .v{font-size:11.5px;letter-spacing:.12em;color:var(--bone-3);margin-top:3px}
+
+/* ===== 通用区块 ===== */
+section{padding:clamp(64px,9vw,132px) 0;scroll-margin-top:58px}
+.pad{padding-inline:var(--pad)}
+.eyebrow{
+  margin:0 0 14px;font-family:var(--mono);font-size:11px;letter-spacing:.24em;
+  color:var(--moss);text-transform:uppercase;
+}
+h2{
+  margin:0;font-family:var(--serif);font-weight:700;
+  font-size:clamp(30px,5.4vw,66px);line-height:1.14;letter-spacing:.01em;
+  text-wrap:balance;
+}
+.sub{margin:18px 0 0;max-width:46em;color:var(--bone-2);font-size:clamp(14.5px,1.3vw,16.5px)}
+.rule{height:1px;background:rgba(237,232,220,.14);margin-top:clamp(30px,4vw,52px)}
+
+/* 揭示动画 */
+[data-rv]{opacity:0;transform:translateY(18px);transition:opacity .8s cubic-bezier(.22,1,.36,1),transform .8s cubic-bezier(.22,1,.36,1)}
+[data-rv].on{opacity:1;transform:none}
+[data-rv="wipe"]{opacity:1;transform:none;clip-path:inset(0 0 100% 0);transition:clip-path 1.05s cubic-bezier(.22,1,.36,1)}
+[data-rv="wipe"].on{clip-path:inset(0 0 0% 0)}
+[data-rv="line"]{opacity:1;transform:none;transform-origin:left;transition:transform 1s cubic-bezier(.22,1,.36,1)}
+[data-rv="line"]{transform:scaleX(0)}
+[data-rv="line"].on{transform:scaleX(1)}
+@media (prefers-reduced-motion:reduce){
+  [data-rv],[data-rv="wipe"],[data-rv="line"]{opacity:1!important;transform:none!important;clip-path:none!important;transition:none!important}
+}
+
+/* ===== 世界横幅 ===== */
+.ribbon-sec{padding-bottom:clamp(40px,6vw,80px)}
+.ribbon-head{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:24px;padding-inline:var(--pad)}
+.ribbon-stage{
+  position:relative;margin:clamp(26px,4vw,44px) var(--pad) 0;height:min(78svh,760px);
+  overflow:hidden;border:1px solid rgba(237,232,220,.16);background:#080A09;
+}
+.ribbon-strip{position:absolute;left:50%;top:0;width:min(620px,86%);transform:translateX(-50%);will-change:transform}
+.ribbon-strip img{width:100%;height:auto}
+.ribbon-grid{
+  position:absolute;inset:0;pointer-events:none;
+  background-image:
+    repeating-linear-gradient(0deg,rgba(237,232,220,.09) 0 1px,transparent 1px 64px),
+    repeating-linear-gradient(90deg,rgba(237,232,220,.06) 0 1px,transparent 1px 64px);
+}
+.ribbon-ui{
+  position:absolute;inset:0;pointer-events:none;
+  display:flex;flex-direction:column;justify-content:space-between;padding:12px 14px;
+  font-family:var(--mono);font-size:11px;letter-spacing:.1em;color:rgba(237,232,220,.55);
+}
+.ribbon-ui .row{display:flex;justify-content:space-between}
+.ribbon-cap{
+  padding:14px var(--pad) 0;display:flex;flex-wrap:wrap;gap:10px 22px;
+  font-family:var(--mono);font-size:11.5px;color:var(--bone-3);letter-spacing:.06em;
+}
+
+/* ===== 对比 ===== */
+.cmp-grid{display:grid;gap:clamp(24px,3vw,44px);margin-top:clamp(28px,4vw,44px);align-items:start}
+@media (min-width:900px){.cmp-grid{grid-template-columns:1.15fr .85fr}}
+.slider{
+  position:relative;aspect-ratio:1;overflow:hidden;border:1px solid rgba(237,232,220,.2);
+  background:#0A0D0B;cursor:ew-resize;touch-action:none;user-select:none;
+}
+.slider img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.slider .after{clip-path:inset(0 0 0 50%)}
+.handle{
+  position:absolute;top:0;bottom:0;left:50%;width:2px;background:var(--amber);
+  transform:translateX(-1px);pointer-events:none;
+}
+.knob{
+  position:absolute;top:50%;left:50%;width:44px;height:44px;margin:-22px 0 0 -22px;
+  border:1px solid var(--amber);border-radius:50%;background:rgba(11,14,12,.72);
+  display:grid;place-items:center;pointer-events:none;
+}
+.knob svg{width:18px;height:18px;stroke:var(--amber)}
+.slider-labels{
+  position:absolute;left:0;right:0;bottom:0;display:flex;justify-content:space-between;
+  padding:10px 12px;font-family:var(--mono);font-size:11px;letter-spacing:.1em;
+  color:var(--bone);background:linear-gradient(0deg,rgba(6,8,7,.86),transparent);
+  pointer-events:none;
+}
+.cmp-copy p{margin:0 0 18px;color:var(--bone-2);font-size:15px}
+.cmp-copy .hint{font-family:var(--mono);font-size:11.5px;letter-spacing:.08em;color:var(--amber)}
+.cmp-copy ul{margin:0;padding:0;list-style:none;border-top:1px solid rgba(237,232,220,.14)}
+.cmp-copy li{display:flex;gap:14px;padding:11px 0;border-bottom:1px solid rgba(237,232,220,.09);font-size:14px}
+.cmp-copy li b{font-family:var(--mono);font-weight:400;font-size:11.5px;color:var(--bone-3);min-width:64px;letter-spacing:.08em}
+
+/* ===== 三个世界 ===== */
+.worlds{display:grid;gap:clamp(18px,2.4vw,26px);margin-top:clamp(30px,4vw,48px)}
+@media (min-width:760px){.worlds{grid-template-columns:repeat(3,1fr)}}
+.world{
+  position:relative;border:1px solid rgba(237,232,220,.14);background:var(--ink-2);
+  display:flex;flex-direction:column;min-width:0;text-align:left;
+  color:inherit;padding:0;font-family:inherit;cursor:pointer;
+  transition:border-color .25s ease,transform .3s cubic-bezier(.22,1,.36,1);
+}
+.world:hover{border-color:rgba(242,160,61,.6);transform:translateY(-3px)}
+.world .frame{position:relative;aspect-ratio:4/5;overflow:hidden;background:#080A09}
+.world .frame img{width:100%;height:100%;object-fit:cover;object-position:center;transition:transform .6s cubic-bezier(.22,1,.36,1)}
+.world:hover .frame img{transform:scale(1.04)}
+.world .body{padding:16px 18px 20px;border-top:1px solid rgba(237,232,220,.12)}
+.world .name{display:flex;align-items:baseline;gap:10px}
+.world .name h3{margin:0;font-family:var(--serif);font-size:24px;font-weight:700}
+.world .name span{font-family:var(--mono);font-size:11px;letter-spacing:.14em;color:var(--bone-3)}
+.world .line{margin:10px 0 0;font-size:13.5px;color:var(--bone-2);line-height:1.7}
+.world .meta{display:flex;gap:16px;margin-top:12px;font-family:var(--mono);font-size:11px;color:var(--bone-3)}
+
+/* ===== 数字 ===== */
+.nums{display:grid;grid-template-columns:repeat(2,1fr);gap:0;margin-top:clamp(24px,3vw,38px);border-top:1px solid rgba(237,232,220,.14)}
+@media (min-width:820px){.nums{grid-template-columns:repeat(4,1fr)}}
+.num{padding:clamp(20px,3vw,30px) 18px;border-bottom:1px solid rgba(237,232,220,.1);border-right:1px solid rgba(237,232,220,.08)}
+.num .n{font-family:var(--serif);font-weight:700;font-size:clamp(30px,4.4vw,58px);line-height:1.05;letter-spacing:-.01em}
+.num .n small{font-family:var(--mono);font-size:.42em;font-weight:400;color:var(--bone-3);margin-left:6px;letter-spacing:.04em}
+.num .l{margin-top:8px;font-size:12.5px;color:var(--bone-3);letter-spacing:.04em}
+
+/* ===== 时间线 ===== */
+.tl{margin-top:clamp(30px,4vw,52px);display:grid;gap:0}
+.tl-item{
+  display:grid;grid-template-columns:1fr;gap:0;padding:22px 0;
+  border-top:1px solid rgba(237,232,220,.12);
+}
+@media (min-width:820px){.tl-item{grid-template-columns:150px 26px 1fr;gap:0}}
+.tl-time{font-family:var(--mono);font-size:12px;letter-spacing:.1em;color:var(--amber);margin-bottom:8px}
+@media (min-width:820px){.tl-time{margin-bottom:0;padding-top:6px}}
+.tl-axis{position:relative;display:none}
+@media (min-width:820px){.tl-axis{display:block}}
+.tl-axis::before{content:"";position:absolute;left:50%;top:0;bottom:-22px;width:1px;background:rgba(237,232,220,.16);transform:translateX(-50%)}
+.tl-axis i{position:absolute;left:50%;top:8px;width:9px;height:9px;background:var(--moss);transform:translateX(-50%) rotate(45deg)}
+.tl-body h3{margin:0;font-family:var(--serif);font-size:clamp(20px,2.4vw,27px);font-weight:700}
+.tl-body p{margin:8px 0 0;max-width:44em;color:var(--bone-2);font-size:14.5px}
+
+/* ===== 三行技术 ===== */
+.tech{border-top:1px solid rgba(237,232,220,.14);margin-top:clamp(26px,3.4vw,44px)}
+.tech-row{display:grid;grid-template-columns:1fr;gap:4px;padding:20px 0;border-bottom:1px solid rgba(237,232,220,.09)}
+@media (min-width:820px){.tech-row{grid-template-columns:170px 1fr;gap:24px;align-items:baseline}}
+.tech-row .t{font-family:var(--mono);font-size:11.5px;letter-spacing:.1em;color:var(--bone-3)}
+.tech-row .d{font-size:15px;color:var(--bone-2)}
+.tech-row .d b{color:var(--bone);font-weight:600}
+
+/* ===== 开始 ===== */
+.cmds{display:grid;gap:14px;margin-top:clamp(24px,3vw,36px)}
+.cmd{border:1px solid rgba(237,232,220,.16);background:var(--ink-2)}
+.cmd-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 14px;border-bottom:1px solid rgba(237,232,220,.1)}
+.cmd-head span{font-size:12.5px;color:var(--bone-2)}
+.cp{
+  font-family:var(--mono);font-size:11px;letter-spacing:.08em;color:var(--amber);
+  background:none;border:1px solid rgba(242,160,61,.35);padding:5px 10px;cursor:pointer;
+  transition:background .16s ease,color .16s ease;
+}
+.cp:hover{background:rgba(242,160,61,.12)}
+.cp.done{color:var(--bone);border-color:rgba(237,232,220,.4)}
+.cmd pre{
+  margin:0;padding:13px 14px;overflow-x:auto;
+  font-family:var(--mono);font-size:12.5px;line-height:1.85;color:#CFC9BB;
+}
+.cmd pre .c{color:#6F7669}
+
+/* ===== 页脚 ===== */
+footer{border-top:1px solid rgba(237,232,220,.14);padding:clamp(34px,5vw,56px) var(--pad) 44px}
+.foot{display:flex;flex-wrap:wrap;gap:20px;align-items:flex-end;justify-content:space-between}
+.foot .big{font-family:var(--serif);font-size:clamp(22px,3.2vw,34px);line-height:1.3;margin:0}
+.foot .small{font-family:var(--mono);font-size:11.5px;color:var(--bone-3);letter-spacing:.06em;text-align:right}
+.reach{display:flex;flex-wrap:wrap;gap:9px;align-items:center;margin-top:34px;padding-top:18px;border-top:1px solid rgba(237,232,220,.1)}
+.reach .tag{font-size:12px;color:var(--bone-3);letter-spacing:.04em;margin-right:7px}
+.reach .cp{font-size:11.5px;letter-spacing:.03em;font-variant-numeric:tabular-nums;padding:6px 11px}
+.reach .cp:hover{color:var(--amber)}
+
+/* ===== 灯箱 ===== */
+.lb{position:fixed;inset:0;z-index:30;display:none;place-items:center;background:rgba(6,8,7,.94);padding:20px}
+.lb.open{display:grid}
+.lb img{max-width:min(96vw,1100px);max-height:88svh;object-fit:contain;border:1px solid rgba(237,232,220,.2)}
+.lb .close{
+  position:absolute;top:16px;right:16px;width:44px;height:44px;border:1px solid rgba(237,232,220,.3);
+  background:transparent;color:var(--bone);cursor:pointer;font-size:20px;line-height:1;
+}
+.lb .cap{position:absolute;left:0;right:0;bottom:14px;text-align:center;font-family:var(--mono);font-size:11.5px;color:var(--bone-3);letter-spacing:.08em}
+</style>
+</head>
+<body>
+<div class="grain" aria-hidden="true"></div>
+<header class="top">
+  <a class="brand" href="#top" aria-label="回到顶部">
+    <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M16 4l11 6v12L16 28 5 22V10z" fill="none" stroke="#7E9E63" stroke-width="1.6"/><path d="M5 10l11 6 11-6M16 16v12" fill="none" stroke="#EDE8DC" stroke-width="1.2" opacity=".55"/></svg>
+    MINI2MC
+  </a>
+  <nav aria-label="页面导航">
+    <a href="#ribbon">世界</a>
+    <a href="#compare">对比</a>
+    <a href="#worlds">三个世界</a>
+    <a href="#story">故事</a>
+    <a href="#start">开始</a>
+  </nav>
+</header>
+
+<!-- ===== 首屏 ===== -->
+<div id="top"></div>
+<section class="hero">
+  <div class="hero-media" aria-hidden="true">
+    <img src="assets/hero.webp" alt="等距视角的主世界村落：围墙、樱花树、湖与沙滩" fetchpriority="high" width="1740" height="954">
+  </div>
+  <div class="hero-shade" aria-hidden="true"></div>
+  <div class="hero-inner">
+    <p class="tag">MINIWORLD .R → MINECRAFT .MCA</p>
+    <h1>你盖的房子<br><em>还在。</em><span class="sr-only">——Mini2MC 把《迷你世界》的 .r 存档转换成 Minecraft 的 .mca 世界</span></h1>
+    <p class="lede">一座 2020 年的《迷你世界》存档，现在可以以 Minecraft 世界的身份打开。46 个 region 文件、16,008 个区块、2.3 亿个方块，从二进制的 .r 整块搬到 .mca，坐标、朝向、高度都对得上。</p>
+    <div class="hero-actions">
+      <a class="btn solid" href="#compare">
+        看它怎么活过来
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M12 4v16M6 14l6 6 6-6"/></svg>
+      </a>
+      <a class="btn" href="https://github.com/FeiCat-Henry/Mini2Mc-Legend/" target="_blank" rel="noopener">
+        立即开始
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M7 17L17 7M9 7h8v8"/></svg>
+      </a>
+    </div>
+  </div>
+  <div class="hero-facts">
+    <div class="fact"><div class="k mono">46</div><div class="v">个 region 文件</div></div>
+    <div class="fact"><div class="k mono">16,008</div><div class="v">个区块</div></div>
+    <div class="fact"><div class="k mono">230,712,743</div><div class="v">个方块</div></div>
+    <div class="fact"><div class="k mono">24.5 MB</div><div class="v">输出体积</div></div>
+  </div>
+</section>
+
+<!-- ===== 世界横幅 ===== -->
+<section class="ribbon-sec" id="ribbon">
+  <div class="ribbon-head">
+    <div>
+      <p class="eyebrow" data-rv>一个世界</p>
+      <h2 data-rv="wipe">1744 × 4160 格，<br>一屏装不下。</h2>
+    </div>
+    <p class="sub" data-rv style="max-width:26em;margin:0">这是主世界的俯视图。每一格都来自存档里的真实方块，从最底层一路找到最高处。往下滚，它自己会走。</p>
+  </div>
+  <div class="ribbon-stage">
+    <div class="ribbon-strip"><img src="preview_m0.webp" alt="主世界俯视预览：草地、森林与湖泊" width="1744" height="4160" loading="lazy"></div>
+    <div class="ribbon-grid" aria-hidden="true"></div>
+    <div class="ribbon-ui" aria-hidden="true">
+      <div class="row"><span>m0 · 主世界</span><span>8848 CHUNKS</span></div>
+      <div class="row"><span id="rz">z = −2784</span><span>y 14 — 255</span></div>
+    </div>
+  </div>
+  <div class="ribbon-cap">
+    <span>1 像素 = 1 格方块</span>
+    <span>最高点 y=255</span>
+    <span>存档里最早的区块写着 2020-03-23</span>
+  </div>
+</section>
+
+<!-- ===== 对比 ===== -->
+<section id="compare">
+  <div class="pad">
+    <p class="eyebrow" data-rv>一个错误</p>
+    <h2 data-rv="wipe">同一个村子，<br>两种朝向。</h2>
+    <div class="cmp-grid">
+      <div class="slider" id="slider" role="slider" tabindex="0" aria-label="拖动对比：错位版与正确版" aria-valuemin="0" aria-valuemax="100" aria-valuenow="52">
+        <img src="assets/axis_off.jpg" alt="错位版：村庄被切成一条条错位的长条" width="900" height="900">
+        <img class="after" id="afterImg" src="assets/axis_on.jpg" alt="正确版：完整的村庄，围墙围成矩形" width="900" height="900">
+        <div class="handle" id="handle">
+          <div class="knob">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M9 7L4 12l5 5M15 7l5 5-5 5"/></svg>
+          </div>
+        </div>
+        <div class="slider-labels"><span>轴序 A</span><span>轴序 B</span></div>
+      </div>
+      <div class="cmp-copy">
+        <p>最初那版里，每个区块都被悄悄转了 90°：围墙断成一截一截，房子被横着切开，湖面上浮着别的村的树。</p>
+        <p>把段内取样顺序改对之后，围墙重新围成一个完整的矩形，湖回到村子中间，树也不再漂着。</p>
+        <p class="hint">拖动中间那条线 · 也可用 ← → 键</p>
+        <ul>
+          <li><b>坐标</b>这块地的主世界坐标为 (−212, 546)</li>
+          <li><b>范围</b>280 × 280 格，取自 m0 真实区块</li>
+          <li><b>左</b>每区块内部被转了 90° 的取样</li>
+          <li><b>右</b>现在交付的版本</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== 三个世界 ===== -->
+<section id="worlds">
+  <div class="pad">
+    <p class="eyebrow" data-rv>三个世界</p>
+    <h2 data-rv="wipe">不止一个存档，<br>是三颗星球。</h2>
+    <p class="sub" data-rv>同一个存档里有三个维度。点开任意一张，看见它有多大。</p>
+    <div class="worlds">
+      <button class="world" type="button" data-lb="preview_m0.webp" data-cap="m0 · 主世界 · 1744 × 4160">
+        <div class="frame"><img src="preview_m0.webp" alt="主世界俯视预览" loading="lazy"></div>
+        <div class="body">
+          <div class="name"><h3>主世界</h3><span>M0</span></div>
+          <p class="line">你住的那个世界：草地、湖泊、一整片森林，还有一座被围墙圈起来的村子。</p>
+          <div class="meta"><span>8848 区块</span><span>1744 × 4160</span></div>
+        </div>
+      </button>
+      <button class="world" type="button" data-lb="preview_m1.webp" data-cap="m1 · 地心 · 560 × 896">
+        <div class="frame"><img src="preview_m1.webp" alt="地心俯视预览" loading="lazy"></div>
+        <div class="body">
+          <div class="name"><h3>地心</h3><span>M1</span></div>
+          <p class="line">岩浆与地心岩的世界。映射表只认得这里 3.17% 的方块，其余按规则落成土块。</p>
+          <div class="meta"><span>1125 区块</span><span>560 × 896</span></div>
+        </div>
+      </button>
+      <button class="world" type="button" data-lb="preview_m2.webp" data-cap="m2 · 萌眼星 · 1072 × 4528">
+        <div class="frame"><img src="preview_m2.webp" alt="萌眼星俯视预览" loading="lazy"></div>
+        <div class="body">
+          <div class="name"><h3>萌眼星</h3><span>M2</span></div>
+          <p class="line">97.9% 是同一种紫色岩石，映射表里没有它的名字——所以整颗星球现在是一片土。</p>
+          <div class="meta"><span>6035 区块</span><span>1072 × 4528</span></div>
+        </div>
+      </button>
+    </div>
+  </div>
+</section>
+
+<!-- ===== 数字 ===== -->
+<section id="numbers">
+  <div class="pad">
+    <p class="eyebrow" data-rv>字节，不是渲染</p>
+    <h2 data-rv="wipe">这些数字，<br>是从文件里数出来的。</h2>
+    <div class="nums">
+      <div class="num" data-rv><div class="n">46<small>个</small></div><div class="l">region 文件，全部解开</div></div>
+      <div class="num" data-rv style="transition-delay:.08s"><div class="n">16,008<small>个</small></div><div class="l">区块，逐个重写成 Anvil</div></div>
+      <div class="num" data-rv style="transition-delay:.16s"><div class="n">2.3<small>亿</small></div><div class="l">方块，逐个写过一遍</div></div>
+      <div class="num" data-rv style="transition-delay:.24s"><div class="n">0</div><div class="l">抽样回读时的不一致方块</div></div>
+    </div>
+    <p class="sub" data-rv>能对上名字的方块占 24.74%，对不上的按规则落成土块——所以远看是完整的星球，近看有些地方会「认不出」。</p>
+  </div>
+</section>
+
+<!-- ===== 故事 ===== -->
+<section id="story">
+  <div class="pad">
+    <p class="eyebrow" data-rv>一年半</p>
+    <h2 data-rv="wipe">这件事，<br>想了一年半。</h2>
+    <div class="tl">
+      <div class="tl-item">
+        <div class="tl-time">2024 · 冬</div>
+        <div class="tl-axis"><i></i></div>
+        <div class="tl-body"><h3>高三的那个冬天</h3><p>想把自己的存档搬进 Minecraft。和 miniworld-r-file-reader 的作者一起做了 Mini2MC-Legend，但它绕的是游戏内置接口，读不出真正的 .r。</p></div>
+      </div>
+      <div class="tl-item">
+        <div class="tl-time">2026 · 02</div>
+        <div class="tl-axis"><i></i></div>
+        <div class="tl-body"><h3>一个初中生先做到了</h3><p>他用一个月拆开了 .r，视频冲上 B 站全区前三，群从 17 人涨到 800 人。但他迟迟没有开源。</p></div>
+      </div>
+      <div class="tl-item">
+        <div class="tl-time">2026 · 06</div>
+        <div class="tl-axis"><i></i></div>
+        <div class="tl-body"><h3>高考完的暑假</h3><p>第二次尝试，停在反编译的门口。看得见函数名，读不懂函数在做什么。</p></div>
+      </div>
+      <div class="tl-item">
+        <div class="tl-time">2026 · 09</div>
+        <div class="tl-axis"><i></i></div>
+        <div class="tl-body"><h3>第一次觉得「可以了」</h3><p>用 agent 做完一个游戏之后，才想到同一双手也许能拆这个格式。</p></div>
+      </div>
+      <div class="tl-item">
+        <div class="tl-time">2026 · 11 · 11</div>
+        <div class="tl-axis"><i></i></div>
+        <div class="tl-body"><h3>双十一，一个小时</h3><p>翻出两个尘封的 .so，抱着试试的心态发了过去。一小时后，46 个 region 全部变成了 .mca。</p></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== 三行技术 ===== -->
+<section id="tech">
+  <div class="pad">
+    <p class="eyebrow" data-rv>只留三行</p>
+    <h2 data-rv="wipe">技术部分，<br>就这三行。</h2>
+    <div class="tech">
+      <div class="tech-row" data-rv><div class="t">寻址</div><div class="d">每个区块的位置都被 <b>16 个常量之一</b>异或过；长度字段还会说谎，只有偏移是真的。</div></div>
+      <div class="tech-row" data-rv><div class="t">解压</div><div class="d">载荷是原始 <b>LZMA1</b>，属性字节永远是 <b>0x5D</b>，字典 16 KB，末尾常差 1–4 字节。</div></div>
+      <div class="tech-row" data-rv><div class="t">结构</div><div class="d"><b>FlatBuffer</b> 里 16 个段，每段 4096 个方块：低 12 位是 id，高 4 位是状态，下标 <b>(y&lt;&lt;8)|(x&lt;&lt;4)|z</b>。</div></div>
+    </div>
+    <p class="sub" data-rv>完整的字段表和踩过的坑，写在 <a href="r_format.md" style="color:var(--amber)">docs/r_format.md</a> 里。页面这里不讲。</p>
+  </div>
+</section>
+
+<!-- ===== 开始 ===== -->
+<section id="start">
+  <div class="pad">
+    <p class="eyebrow" data-rv>自己转一遍</p>
+    <h2 data-rv="wipe">三条命令，<br>把你的世界搬过来。</h2>
+    <div class="cmds">
+      <div class="cmd" data-rv>
+        <div class="cmd-head"><span>自检：拿一个 .r 样本，解码后回读比对</span><button class="cp" type="button" data-copy="python tools/MiniWorld_R_Tool.py --selftest &lt;存档目录&gt;">复制</button></div>
+        <pre>python tools/MiniWorld_R_Tool.py --selftest &lt;存档目录&gt;</pre>
+      </div>
+      <div class="cmd" data-rv>
+        <div class="cmd-head"><span>全量转换：.r → .mca</span><button class="cp" type="button" data-copy="python tools/to_mca.py --save &lt;存档目录&gt; --out out/world">复制</button></div>
+        <pre>python tools/to_mca.py --save &lt;存档目录&gt; --out out/world</pre>
+      </div>
+      <div class="cmd" data-rv>
+        <div class="cmd-head"><span>俯视预览：看一眼再进游戏</span><button class="cp" type="button" data-copy="python tools/render_map.py --save &lt;存档目录&gt; --dim m0 --out preview_m0.png">复制</button></div>
+        <pre>python tools/render_map.py --save &lt;存档目录&gt; --dim m0 --out preview_m0.png</pre>
+      </div>
+    </div>
+    <p class="sub" data-rv>依赖只有一个，而且只有出预览图才用得到：<span class="mono">pip install -r requirements.txt</span>（Pillow）。转换本身只用标准库。没有原生窗口环境时，<span class="mono">python tools/MiniWorld_R_Tool.py --web</span> 会在本地起一个网页界面。映射表是 <span class="mono">tools/mc_block_map.json</span>，表里没有的方块一律落成土块。</p>
+  </div>
+</section>
+
+<footer>
+  <div class="foot">
+    <div>
+      <p class="big">存档里那些房子，<br>是我 2019 年盖的。</p>
+      <p class="mono" style="margin:14px 0 0;font-size:11.5px;color:var(--bone-3)">数据全部来自真实存档 w85624992381678 · 输出 DataVersion 3465（Minecraft 1.20.1）</p>
+    </div>
+    <div class="small">
+      <div>MIT LICENSE</div>
+      <div style="margin-top:6px">2026 · MINI2MC CONTRIBUTORS</div>
+    </div>
+  </div>
+  <div class="reach">
+    <span class="tag">联系我们</span>
+    <button class="cp" type="button" data-copy="1053150006" title="点击复制群号">QQ 群 · 1053150006</button>
+    <button class="cp" type="button" data-copy="1278489415" title="点击复制 QQ 号">QQ · 1278489415</button>
+    <button class="cp" type="button" data-copy="3857463390" title="点击复制 QQ 号">QQ · 3857463390</button>
+  </div>
+</footer>
+
+<div class="lb" id="lb" role="dialog" aria-modal="true" aria-label="预览大图">
+  <button class="close" type="button" id="lbClose" aria-label="关闭">×</button>
+  <img id="lbImg" src="" alt="">
+  <div class="cap" id="lbCap"></div>
+</div>
+
+<script>
+(function(){
+  var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  /* ---- 进入视野时揭示 ---- */
+  var nodes = [].slice.call(document.querySelectorAll('[data-rv]'));
+  if (reduce || !('IntersectionObserver' in window)) {
+    nodes.forEach(function(n){ n.classList.add('on'); });
+  } else {
+    var io = new IntersectionObserver(function(entries){
+      entries.forEach(function(e){
+        if (e.isIntersecting) { e.target.classList.add('on'); io.unobserve(e.target); }
+      });
+    }, { rootMargin: '0px 0px -10% 0px', threshold: 0.12 });
+    nodes.forEach(function(n){ io.observe(n); });
+    // 兜底：若 1.2 秒内一个都没触发（无头环境/IO 被节流），直接全部显示，绝不留下空白页
+    setTimeout(function(){
+      if (!document.querySelector('[data-rv].on')) {
+        nodes.forEach(function(n){ n.classList.add('on'); });
+      }
+    }, 1200);
+  }
+
+  /* ---- 首屏与世界横幅的视差 ---- */
+  var heroImg = document.querySelector('.hero-media img');
+  var strip = document.querySelector('.ribbon-strip');
+  var stage = document.querySelector('.ribbon-stage');
+  var rz = document.getElementById('rz');
+  var ticking = false;
+
+  function frame(){
+    ticking = false;
+    var vh = window.innerHeight || 800;
+    if (heroImg && !reduce) {
+      var t = Math.min(1, Math.max(0, (window.pageYOffset || 0) / vh));
+      heroImg.style.transform = 'scale(1.04) translateY(' + (t * 26).toFixed(1) + 'px)';
+    }
+    if (strip && stage) {
+      var r = stage.getBoundingClientRect();
+      var p = Math.min(1, Math.max(0, (vh - r.top) / (vh + r.height)));
+      var max = Math.max(0, strip.offsetHeight - stage.clientHeight);
+      var shift = reduce ? max * 0.5 : p * max;
+      strip.style.transform = 'translateX(-50%) translateY(' + (-shift).toFixed(1) + 'px)';
+      if (rz) {
+        var z = -2784 + Math.round(shift / Math.max(1, strip.offsetHeight) * 4160);
+        rz.textContent = 'z = ' + z;
+      }
+    }
+  }
+  function onScroll(){
+    if (!ticking) { ticking = true; window.requestAnimationFrame(frame); }
+  }
+  window.addEventListener('scroll', onScroll, { passive: true });
+  window.addEventListener('resize', onScroll);
+  if (strip) { strip.querySelector('img').addEventListener('load', frame); }
+  frame();
+
+  /* ---- 拖动对比 ---- */
+  var slider = document.getElementById('slider');
+  if (slider) {
+    var after = document.getElementById('afterImg');
+    var handle = document.getElementById('handle');
+    var dragging = false;
+    function setPct(p){
+      p = Math.min(96, Math.max(4, p));
+      after.style.clipPath = 'inset(0 0 0 ' + p + '%)';
+      handle.style.left = p + '%';
+      slider.setAttribute('aria-valuenow', Math.round(p));
+    }
+    function fromEvent(ev){
+      var r = slider.getBoundingClientRect();
+      var x = (ev.touches ? ev.touches[0].clientX : ev.clientX) - r.left;
+      setPct(x / r.width * 100);
+    }
+    slider.addEventListener('pointerdown', function(ev){
+      slider.classList.remove('kbfocus');
+      dragging = true; slider.setPointerCapture(ev.pointerId); fromEvent(ev);
+    });
+    slider.addEventListener('pointermove', function(ev){ if (dragging) fromEvent(ev); });
+    slider.addEventListener('pointerup', function(){ dragging = false; });
+    slider.addEventListener('pointercancel', function(){ dragging = false; });
+    slider.addEventListener('keydown', function(ev){
+      var cur = parseFloat(slider.getAttribute('aria-valuenow')) || 50;
+      if (ev.key === 'ArrowLeft' || ev.key === 'ArrowRight' || ev.key === 'Home' || ev.key === 'End') {
+        ev.preventDefault();
+        slider.classList.add('kbfocus');
+        if (ev.key === 'Home') setPct(4);
+        else if (ev.key === 'End') setPct(96);
+        else setPct(cur + (ev.key === 'ArrowLeft' ? -3 : 3));
+      }
+    });
+    setPct(52);
+  }
+
+  /* ---- 复制命令 ---- */
+  [].slice.call(document.querySelectorAll('.cp')).forEach(function(btn){
+    btn.addEventListener('click', function(){
+      var text = btn.getAttribute('data-copy') || '';
+      var done = function(){
+        var old = btn.textContent;
+        btn.textContent = '已复制'; btn.classList.add('done');
+        setTimeout(function(){ btn.textContent = old; btn.classList.remove('done'); }, 1400);
+      };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(done, done);
+      } else {
+        var ta = document.createElement('textarea');
+        ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+        document.body.appendChild(ta); ta.select();
+        try { document.execCommand('copy'); } catch(e) {}
+        document.body.removeChild(ta); done();
+      }
+    });
+  });
+
+  /* ---- 大图预览 ---- */
+  var lb = document.getElementById('lb');
+  var lbImg = document.getElementById('lbImg');
+  var lbCap = document.getElementById('lbCap');
+  var lastFocus = null;
+
+  function openLb(src, cap, trigger){
+    lastFocus = trigger || null;
+    lbImg.src = src; lbImg.alt = cap || '';
+    lbCap.textContent = cap || '';
+    lb.classList.add('open');
+    document.body.style.overflow = 'hidden';
+    document.getElementById('lbClose').focus();
+  }
+  function closeLb(){
+    lb.classList.remove('open');
+    lbImg.src = '';
+    document.body.style.overflow = '';
+    if (lastFocus) { lastFocus.focus(); lastFocus = null; }
+  }
+  [].slice.call(document.querySelectorAll('.world')).forEach(function(card){
+    card.addEventListener('click', function(){
+      openLb(card.getAttribute('data-lb'), card.getAttribute('data-cap'), card);
+    });
+  });
+  document.getElementById('lbClose').addEventListener('click', closeLb);
+  lb.addEventListener('click', function(ev){ if (ev.target === lb) closeLb(); });
+  document.addEventListener('keydown', function(ev){
+    if (ev.key === 'Escape' && lb.classList.contains('open')) closeLb();
+  });
+})();
+</script>
+</body>
+</html>

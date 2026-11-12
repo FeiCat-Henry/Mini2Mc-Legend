@@ -1,0 +1,5 @@
+User-agent: *
+Allow: /
+
+# 部署后把 your-github-user 换成你的 GitHub 用户名（与 index.html 里的占位一致）
+Sitemap: https://your-github-user.github.io/Mini2MC/sitemap.xml
