@@ -24,9 +24,9 @@
         索引项 e: offset = (e & 0x7FFFFF) ^ KEYS[idx & 0xF]，len = (e>>24)&0xFF
   压缩：记录 = [u32 size][u32 tag][payload]；tag>>28 == 2 表示 LZMA；载荷 = props + dictSize + raw LZMA1
   数据：FlatBuffer，root -> field1 是 section 向量；每个 section 含 4096 个 u16 方块值
-        方块值 = 低 12 位 id | 高 4 位状态；体素下标 i = (yLocal<<8)|(x<<4)|z
-        （与 MC 的 block_states 顺序一致，转换时原样写入；缩略预览图另按
-          (yLocal<<8)|(z<<4)|x 取样，见 pidx()，仅影响出图不影响 .mca）
+        方块值 = 低 12 位 id | 高 4 位状态；体素下标 i = (yLocal<<8)|(z<<4)|x
+        （与 MC 的 block_states 顺序一致，转换和出图共用；迷你世界的 z 朝向与 MC 相反，
+          写出前整体镜像一次，见 zmirror_ids() / region_zsum()）
 """
 
 # ============================================================ 0. 常量
@@ -220,26 +220,40 @@ def lzma_raw_decompress(payload):
 
 
 def vidx(x, y_local, z):
-    """段内下标（转换/读取用）：(yLocal<<8) | (x<<4) | z
+    """段内下标：(yLocal<<8) | (z<<4) | x —— 与 MC 的 block_states 顺序相同。
 
-    与 Minecraft Anvil 的 block_states 顺序一致，所以写 .mca 时可以原样倒过去。
-    这是已经核对过的版本（产物在游戏里朝向正确），不要改。
-    """
-    return (y_local << 8) | (x << 4) | z
-
-
-def pidx(x, y_local, z):
-    """预览取样下标（仅出图用）：(yLocal<<8) | (z<<4) | x
-
-    它和 vidx 在 16×16 平面内互为转置。用 vidx 直接铺成图时，每个区块的图案是被
-    转置的，拼起来就会像"每个区块各自转了 90°、接缝错位"；出图时按 pidx 取样，
-    图像即连续。**只影响缩略图，.mca 仍用 vidx 原样写。**
+    判定见 `_work/tools/60_axis_test.py`：相邻区块交界整柱一致率按这个解释 97.9%，
+    x/z 互换后只有 95.3%；图像上错的那种在区块边界处会看出缝。
     """
     return (y_local << 8) | (z << 4) | x
 
 
+def pidx(x, y_local, z):
+    """预览取样下标。与 vidx 同一套语义，保留成独立入口只为出图代码读起来清楚。"""
+    return (y_local << 8) | (z << 4) | x
+
+
+def zmirror_ids(ids):
+    """把 4096 长的段内数组沿 z 轴镜像（数组按 MC 的 (y<<8)|(z<<4)|x 解释）。
+
+    迷你世界的 z 朝向和 MC 相反，转换时用它把 z 翻过来，世界才不会前后镜像。
+    """
+    out = []
+    for yl in range(16):
+        base = yl << 8
+        for z in range(15, -1, -1):
+            off = base + (z << 4)
+            out.extend(ids[off:off + 16])
+    return out
+
+
+def region_zsum(zs):
+    """一个维度里 region 的 z 编号 min+max，镜像时 z' = zsum - z。"""
+    return min(zs) + max(zs)
+
+
 class Section(object):
-    """一个 16³ 段。ids/extra 下标 i = (yLocal<<8)|(x<<4)|z，见 vidx()"""
+    """一个 16³ 段。ids/extra 下标 i = (yLocal<<8)|(z<<4)|x，见 vidx()"""
     __slots__ = ('segment', 'band', 'ids', 'extra', 'bitmap_a', 'bitmap_b',
                  'scalar_a', 'scalar_b')
 
@@ -680,8 +694,12 @@ def write_region(path, chunk_nbt):
 
 
 # ============================================================ 5. 转换
-def convert_region(rf, mapper, dim, data_version, max_band=15):
-    """返回 ([(idx, nbt)], stats)"""
+def convert_region(rf, mapper, dim, data_version, max_band=15, zsum=None):
+    """返回 ([(idx, nbt)], stats)
+
+    zsum = 该维度 region z 编号的 min+max；给了就按世界 z 镜像输出（迷你世界的
+    z 朝向与 MC 相反），None 表示原样。
+    """
     x0, z0 = parse_region_name(rf.path)
     biome = DIM_INFO[dim][1]
     ypos = DIM_INFO[dim][3]
@@ -690,6 +708,8 @@ def convert_region(rf, mapper, dim, data_version, max_band=15):
     for idx in rf.chunk_indexes():
         ch = rf.read_chunk(idx)
         cx, cz = ch.index & 31, ch.index >> 5
+        cz_dst = cz if zsum is None else 31 - cz
+        rz_dst = z0 if zsum is None else zsum - z0
         sections = []
         for band in range(0, max_band + 1):
             sec = ch.sections.get(band)
@@ -698,8 +718,8 @@ def convert_region(rf, mapper, dim, data_version, max_band=15):
             else:
                 cache = {}
                 names = []
-                # 4096 个 id 原样按顺序写进 block_states（.r 与 MC 的段内顺序一致）
-                for v in sec.ids:
+                # 段内按 MC 的 (y<<8)|(z<<4)|x 解释；给了 zsum 就把 z 翻转后再写
+                for v in (sec.ids if zsum is None else zmirror_ids(sec.ids)):
                     hit = cache.get(v)
                     if hit is None:
                         hit = mapper.name_of(dim, v)
@@ -712,8 +732,9 @@ def convert_region(rf, mapper, dim, data_version, max_band=15):
                 stats['blocks'] += sum(1 for v in sec.ids if v)
             if any(n != AIR for n in names) or band == 0:
                 sections.append((band, names))
-        out.append((idx, build_chunk(x0 * 32 + cx, z0 * 32 + cz, sections,
-                                     biome, data_version, ypos)))
+        out.append((((cz_dst << 5) | cx),
+                    build_chunk(x0 * 32 + cx, rz_dst * 32 + cz_dst, sections,
+                                biome, data_version, ypos)))
         stats['chunks'] += 1
     return out, stats
 
@@ -885,7 +906,7 @@ def read_mca(path):
     return out
 
 
-def verify_region(src_path, mca_path, mapper, dim):
+def verify_region(src_path, mca_path, mapper, dim, zsum=None):
     """返回 (对比方块数, 不一致数, 前几条差异)"""
     import os
     if not os.path.exists(mca_path):
@@ -897,7 +918,9 @@ def verify_region(src_path, mca_path, mapper, dim):
     diffs = []
     for idx in rf.chunk_indexes():
         ch = rf.read_chunk(idx)
-        secs = mca.get(idx)
+        cx, cz = idx & 31, idx >> 5
+        jdx = idx if zsum is None else (((31 - cz) << 5) | cx)
+        secs = mca.get(jdx)
         if secs is None:
             bad += 4096 * 16
             diffs.append('chunk %d 缺失' % idx)
@@ -908,12 +931,14 @@ def verify_region(src_path, mca_path, mapper, dim):
             for i in range(4096):
                 v = src_sec.ids[i] if src_sec else 0
                 want = mapper.name_of(dim, v)[0] if v else AIR
+                yl, zl, xl = i >> 8, (i >> 4) & 15, i & 15
+                j = i if zsum is None else ((yl << 8) | ((15 - zl) << 4) | xl)
                 total += 1
-                if dst[i] != want:
+                if dst[j] != want:
                     bad += 1
                     if len(diffs) < 5:
-                        diffs.append('chunk %d band %d i %d (x%d z%d): 得到 %s 期望 %s'
-                                     % (idx, band, i, (i >> 4) & 0xF, i & 0xF, dst[i], want))
+                        diffs.append('chunk %d band %d (x%d y%d z%d): 得到 %s 期望 %s'
+                                     % (idx, band, xl, yl, zl, dst[j], want))
     return total, bad, diffs
 
 
@@ -1132,7 +1157,9 @@ def op_convert(ctx, p):
         if not files:
             ctx.log('跳过：%s 下没有匹配的 .r' % dim)
             continue
-        plan.append((dim, src, files))
+        full, _ = list_regions(save, dim)
+        zsum = region_zsum([parse_region_name(f)[1] for f in full]) if full else None
+        plan.append((dim, src, files, zsum))
     total_files = sum(len(x[2]) for x in plan)
     if not total_files:
         raise ValueError('没有可转换的 .r 文件')
@@ -1142,7 +1169,7 @@ def op_convert(ctx, p):
     unknown_ids = collections.Counter()
     done = 0
     t0 = time.time()
-    for dim, src, files in plan:
+    for dim, src, files, zsum in plan:
         dst = os.path.join(out, DIM_INFO[dim][0])
         os.makedirs(dst, exist_ok=True)
         for fn in files:
@@ -1150,8 +1177,10 @@ def op_convert(ctx, p):
                 ctx.log('已取消。')
                 return
             rf = RegionFile(os.path.join(src, fn))
-            chunk_nbt, st = convert_region(rf, mapper, dim, dv)
+            chunk_nbt, st = convert_region(rf, mapper, dim, dv, zsum=zsum)
             rx, rz = parse_region_name(rf.path)
+            if zsum is not None:
+                rz = zsum - rz
             out_path = os.path.join(dst, 'r.%d.%d.mca' % (rx, rz))
             write_region(out_path, chunk_nbt)
             for k in agg:
@@ -1244,6 +1273,8 @@ def op_verify(ctx, p):
         if not files:
             ctx.log('跳过：%s 没有 .r' % dim)
             continue
+        full, _ = list_regions(save, dim)
+        zsum = region_zsum([parse_region_name(f)[1] for f in full]) if full else 0
         pick = files if all_flag else files[:1]
         ctx.log('校验 %s：%d 个文件' % (dim, len(pick)))
         for n, fn in enumerate(pick):
@@ -1252,8 +1283,8 @@ def op_verify(ctx, p):
                 return
             rf_path = os.path.join(src, fn)
             rx, rz = parse_region_name(rf_path)
-            mca = os.path.join(mca_root, DIM_INFO[dim][0], 'r.%d.%d.mca' % (rx, rz))
-            total, bad, diffs = verify_region(rf_path, mca, mapper, dim)
+            mca = os.path.join(mca_root, DIM_INFO[dim][0], 'r.%d.%d.mca' % (rx, zsum - rz))
+            total, bad, diffs = verify_region(rf_path, mca, mapper, dim, zsum)
             overall_total += max(0, total)
             if bad < 0:
                 ctx.log('  %s/%s：%s' % (dim, fn, diffs[0]))
@@ -1840,13 +1871,15 @@ def main_selftest(argv):
     print('样本：m0/%s' % files[0])
     dst = os.path.join(ROOT_DIR, '_work', 'out', 'selftest')
     os.makedirs(dst, exist_ok=True)
+    full, _ = list_regions(save, 'm0')
+    zsum = region_zsum([parse_region_name(f)[1] for f in full]) if full else 0
     rf = RegionFile(os.path.join(src, files[0]))
-    nbt_list, stt = convert_region(rf, mapper, 'm0', 3465)
+    nbt_list, stt = convert_region(rf, mapper, 'm0', 3465, zsum=zsum)
     rx, rz = parse_region_name(rf.path)
-    target = os.path.join(dst, 'r.%d.%d.mca' % (rx, rz))
+    target = os.path.join(dst, 'r.%d.%d.mca' % (rx, zsum - rz))
     write_region(target, nbt_list)
     print('写出 %s（区块 %d，方块 %d，土块 %d）' % (target, stt['chunks'], stt['blocks'], stt['unknown']))
-    total, bad, diffs = verify_region(os.path.join(src, files[0]), target, mapper, 'm0')
+    total, bad, diffs = verify_region(os.path.join(src, files[0]), target, mapper, 'm0', zsum)
     print('回读校验：对比 %d 块，不一致 %d → %s' % (total, bad, 'PASS' if bad == 0 else 'FAIL'))
     for d in diffs:
         print('  ' + d)

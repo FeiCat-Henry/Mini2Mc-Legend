@@ -11,7 +11,7 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from r_reader import RegionFile, pidx
+from r_reader import RegionFile, pidx, parse_region_name, region_zsum
 from to_mca import Mapper, load_map
 
 # MC 方块名 -> 颜色
@@ -135,6 +135,11 @@ def main():
     src = os.path.join(args.save, args.dim)
     files = sorted(glob.glob(os.path.join(src, '*.r')))
 
+    # 世界 z 镜像：迷你世界的 z 朝向与 MC 相反，预览图要按 MC 的朝向来画，
+    # 才和转换出来的 .mca 一致（区块 z 与段内 z 一起翻）。
+    rzs = [parse_region_name(f)[1] for f in files]
+    kz = region_zsum(rzs) * 32 + 31 if rzs else 0
+
     chunks = []
     xs = []
     zs = []
@@ -145,7 +150,7 @@ def main():
         for idx in rf.chunk_indexes():
             cx, cz = idx & 31, idx >> 5
             gx = int(a) * 32 + cx
-            gz = int(b) * 32 + cz
+            gz = kz - (int(b) * 32 + cz)
             chunks.append((rf, idx, gx, gz))
             xs.append(gx)
             zs.append(gz)
@@ -176,13 +181,14 @@ def main():
                     if top_v:
                         break
                 heights.append(top_y)
+                zz = oz + (15 - z)
                 if not top_v:
-                    px[ox + x, oz + z] = (10, 10, 12)
+                    px[ox + x, zz] = (10, 10, 12)
                     continue
                 nm = mapper.name_of(args.dim, top_v)[0]
                 c = C.get(nm, FALLBACK)
                 k = 0.55 + 0.45 * min(1.0, top_y / 90.0)
-                px[ox + x, oz + z] = (int(c[0] * k), int(c[1] * k), int(c[2] * k))
+                px[ox + x, zz] = (int(c[0] * k), int(c[1] * k), int(c[2] * k))
     os.makedirs(os.path.dirname(os.path.abspath(args.out)), exist_ok=True)
     img.save(args.out)
     print('image', W, 'x', H, '->', args.out,

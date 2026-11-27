@@ -21,7 +21,7 @@ import time
 import zlib
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from r_reader import RegionFile, parse_region_name
+from r_reader import RegionFile, parse_region_name, zmirror_ids, region_zsum
 
 # --------------------------------------------------------------------- NBT 编码
 TYPE_ID = {'B': 1, 'S': 2, 'I': 3, 'L': 4, 'F': 5, 'D': 6,
@@ -145,7 +145,7 @@ def build_section(y, names):
 
 
 def build_chunk(xpos, zpos, sections, biome, data_version, ypos):
-    """sections: [(y, names)]；names 为 4096 个方块名"""
+    """sections: [(y, names)]；names 为 4096 个方块名（顺序与 MC 的 (y,z,x) 一致）"""
     sec_list = []
     for y, names in sections:
         comp = build_section(y, names)
@@ -239,7 +239,8 @@ class Mapper(object):
         return self.fallback, True
 
 
-def convert_region(rf, mapper, dim, biome, data_version, ypos, max_band=15):
+def convert_region(rf, mapper, dim, biome, data_version, ypos, max_band=15, zsum=None):
+    """zsum = 该维度 rz 编号的 min+max；给了就按世界 z 镜像输出，None 则原样。"""
     x0, z0 = parse_region_name(rf.path)
     out = []
     stats = {'chunks': 0, 'blocks': 0, 'unknown': 0, 'unknown_ids': {}}
@@ -247,14 +248,18 @@ def convert_region(rf, mapper, dim, biome, data_version, ypos, max_band=15):
         ch = rf.read_chunk(idx)
         cx, cz = ch.index & 31, ch.index >> 5
         xpos = x0 * 32 + cx
-        zpos = z0 * 32 + cz
+        if zsum is None:
+            cz_dst, rz_dst = cz, z0
+        else:
+            cz_dst, rz_dst = 31 - cz, zsum - z0
+        zpos = rz_dst * 32 + cz_dst
         sections = []
         for band in range(0, max_band + 1):
             sec = ch.sections.get(band)
             if sec is None:
                 names = ['minecraft:air'] * 4096
             else:
-                ids = sec.ids
+                ids = sec.ids if zsum is None else zmirror_ids(sec.ids)
                 cache = {}
                 names = []
                 # 4096 个 id 原样按顺序写进 block_states（与 MC 的段内顺序一致）
@@ -274,7 +279,7 @@ def convert_region(rf, mapper, dim, biome, data_version, ypos, max_band=15):
             if any(n != 'minecraft:air' for n in names) or band == 0:
                 sections.append((band, names))
         nbt = build_chunk(xpos, zpos, sections, biome, data_version, ypos)
-        out.append((idx, nbt))
+        out.append((((cz_dst << 5) | cx) if zsum is not None else idx, nbt))
         stats['chunks'] += 1
     return out, stats
 
@@ -313,13 +318,18 @@ def main():
         sub, biome, max_band, ypos = DIM_INFO[dim]
         dst = os.path.join(args.out, sub)
         os.makedirs(dst, exist_ok=True)
-        files = sorted(f for f in os.listdir(src) if f.endswith('.r'))
+        all_files = sorted(f for f in os.listdir(src) if f.endswith('.r'))
+        zsum = region_zsum([parse_region_name(f)[1] for f in all_files]) if all_files else None
+        files = all_files
         if args.region:
             files = [f for f in files if f[:-2] == args.region]
         for fn in files:
             rf = RegionFile(os.path.join(src, fn))
-            chunk_nbt, st = convert_region(rf, mapper, dim, biome, args.data_version, ypos, max_band)
+            chunk_nbt, st = convert_region(rf, mapper, dim, biome, args.data_version,
+                                           ypos, max_band, zsum)
             rx, rz = parse_region_name(rf.path)
+            if zsum is not None:
+                rz = zsum - rz
             out_path = os.path.join(dst, 'r.%d.%d.mca' % (rx, rz))
             write_region(out_path, chunk_nbt)
             for k in total:

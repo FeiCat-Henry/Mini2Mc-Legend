@@ -12,7 +12,7 @@ import sys
 import zlib
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from r_reader import RegionFile, parse_region_name
+from r_reader import RegionFile, parse_region_name, region_zsum
 from to_mca import Mapper, load_map
 
 # ------------------------------------------------------------------ NBT 读取
@@ -174,7 +174,9 @@ def main():
               'm2': os.path.join('DIM1', 'region')}[args.dim]
 
     src = os.path.join(args.save, args.dim)
-    files = sorted(f for f in os.listdir(src) if f.endswith('.r'))
+    all_files = sorted(f for f in os.listdir(src) if f.endswith('.r'))
+    zsum = region_zsum([parse_region_name(f)[1] for f in all_files])
+    files = all_files
     if args.region:
         files = [f for f in files if f[:-2] == args.region]
 
@@ -183,11 +185,13 @@ def main():
     for fn in files:
         rf = RegionFile(os.path.join(src, fn))
         rx, rz = parse_region_name(rf.path)
-        mca_path = os.path.join(args.mca, subdir, 'r.%d.%d.mca' % (rx, rz))
+        mca_path = os.path.join(args.mca, subdir, 'r.%d.%d.mca' % (rx, zsum - rz))
         mca = read_mca(mca_path)
         for idx in rf.chunk_indexes():
             ch = rf.read_chunk(idx)
-            secs = mca.get(idx)
+            cx, cz = idx & 31, idx >> 5
+            jdx = ((31 - cz) << 5) | cx
+            secs = mca.get(jdx)
             if secs is None:
                 print('%s chunk %d: 缺失' % (fn, idx)); bad += 1; continue
             for band in range(0, 16):
@@ -198,8 +202,14 @@ def main():
                 for i in range(4096):
                     v = src_sec.ids[i] if src_sec else 0
                     want = mapper.name_of(args.dim, v)[0] if v else 'minecraft:air'
+                    yl, zl, xl = i >> 8, (i >> 4) & 15, i & 15
+                    j = (yl << 8) | ((15 - zl) << 4) | xl
                     total += 1
-                    if dst[i] != want:
+                    if dst[j] != want:
+                        bad += 1
+                        if bad <= 5:
+                            print('  不一致 %s chunk %d band %d i %d: got %s want %s'
+                                  % (fn, idx, band, j, dst[j], want))
                         bad += 1
                         if bad <= 5:
                             print('  不一致 %s chunk %d band %d i %d: got %s want %s'

@@ -71,24 +71,42 @@ def fb_vector(b, field_off):
 
 
 def vidx(x, y_local, z):
-    """段内下标：(yLocal<<8) | (x<<4) | z
+    """段内下标：(yLocal<<8) | (z<<4) | x —— 与 MC 的 block_states 顺序相同。
 
-    与 MC 的 block_states 顺序一致，写 .mca 时原样使用（这一版已在游戏里核对过）。
-    """
-    return (y_local << 8) | (x << 4) | z
-
-
-def pidx(x, y_local, z):
-    """预览取样下标（仅出图用）：(yLocal<<8) | (z<<4) | x
-
-    和 vidx 在 16×16 平面内互为转置。渲染缩略图时用它，区块之间才连续；
-    转换 .mca 不受影响。
+    判定依据（可复跑 `_work/tools/60_axis_test.py`）：按这个解释取相邻区块交界处的
+    整柱比对，一致率 97.9% / 97.2%，按另一种解释（x、z 互换）只有 95.3% / 91.5%；
+    图像层看，错的那种铺法区块边界处像素差是内部的 4.26 倍，这个 1.05 倍。
     """
     return (y_local << 8) | (z << 4) | x
 
 
+def zmirror_ids(ids):
+    """把 4096 长的段内数组沿 z 轴镜像，用于把迷你世界的 z 朝向翻成 MC 的。
+
+    数组按 MC 的 (y<<8)|(z<<4)|x 解释，所以镜像就是每个 y 切片里把 16 行
+    （每行是一个 z 上的 16 个 x）反过来。转换写 .mca 前调用。
+    """
+    out = []
+    for yl in range(16):
+        base = yl << 8
+        for z in range(15, -1, -1):
+            off = base + (z << 4)
+            out.extend(ids[off:off + 16])
+    return out
+
+
+def region_zsum(zs):
+    """一个维度里 region 的 z 编号范围之和，镜像时 z' = zsum - z。"""
+    return min(zs) + max(zs)
+
+
+def pidx(x, y_local, z):
+    """预览取样下标。与 vidx 同一套语义，保留成独立入口只为出图代码读起来清楚。"""
+    return (y_local << 8) | (z << 4) | x
+
+
 class Section(object):
-    """一个 16x16x16 的段。ids/extra 的下标 i = (yLocal<<8)|(x<<4)|z"""
+    """一个 16x16x16 的段。ids/extra 的下标 i = (yLocal<<8)|(z<<4)|x"""
     __slots__ = ("segment", "band", "ids", "extra", "bitmap_a", "bitmap_b", "scalar_a", "scalar_b")
 
     def __init__(self, segment, band, ids, extra, bitmap_a, bitmap_b, scalar_a, scalar_b):
